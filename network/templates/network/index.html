@@ -1,0 +1,16 @@
+{% extends "network/layout.html" %}
+{% load static %}
+{% block body %}
+    <h1>All Posts</h1>
+    <form  method="post" id="new-post-form">
+        {% csrf_token %}
+        <label for="id_content">New Post</label>
+        {{ postform.as_p }}
+        <input type="submit" value="Submit" id="submit">
+    </form>
+    <div id="posts-container"></div>
+{% endblock %}
+
+{% block script %}
+    <script src="{% static 'network/posts.js' %}"></script>
+{% endblock %}
