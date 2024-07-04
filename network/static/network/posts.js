@@ -1,4 +1,6 @@
 let pagenumber = 1
+const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken')).split('=')[1];
+            
 document.addEventListener('DOMContentLoaded', function () {
     
     document.querySelector('#new-post-form').addEventListener('submit', function (event) {
@@ -15,14 +17,12 @@ document.addEventListener('DOMContentLoaded', function () {
             loadFollowingPosts();
         });
     }
-    document.querySelector('#network').addEventListener('click', function(event) {
-        event.preventDefault();
-        let postsContainer = document.querySelector('#posts-container');
-        postsContainer.innerHTML = '';
-        document.querySelector('#new-post-form').display = flex;
-        console.log('Network clicked.')
-
-    });
+    
+    let userElement = document.querySelector('a#user');
+    userElement.addEventListener('click',function(event){
+    let username = userElement.innerText.trim()
+    loadProfile(username)    
+    })
 
 });
 
@@ -38,16 +38,16 @@ function createPostElement(event) {
     })
         .then(function (response) {
             if (!response.ok) {
-                return response.json().then(function (error) {
+                return response.json()
+                .then(function (error) {
                     throw new Error(error.error);
                 });
             }
             return response.json();
         })
         .then(function (data) {
-            let postElementDiv = createPostElementDiv(data.creator, data.content, null, null);
+            let postElementDiv = createPostElementDiv(data.creator, data.content,null , null, null ,null);
             form.reset();
-
             let editButton = document.createElement('button');
             editButton.id = 'editButton';
             editButton.innerText = 'edit';
@@ -57,7 +57,9 @@ function createPostElement(event) {
             editButton.style.color = 'black';
             editButton.style.borderRadius = '12px';
             postElementDiv.appendChild(editButton);
+
             postsContainer.appendChild(postElementDiv);
+            
 
             editButton.addEventListener('click' , function(event){
                 console.log('lets do it ')
@@ -90,6 +92,7 @@ function createPostElement(event) {
             alert(`Error: ${error.message}`);
         });
 }
+
 
 function loadAllPosts() {
     let postsContainer = document.querySelector('#posts-container');
@@ -125,7 +128,13 @@ function loadAllPosts() {
     }
 
             posts.posts.forEach(function (post){
-                let postElementDiv = createPostElementDiv(post.username, post.content, post.timestamp, post.likes);
+                console.log(post)
+                let postElementDiv = createPostElementDiv(post.username, post.content, post.timestamp, post.likes , post.liked_user , post.id);
+                let likeButton = postElementDiv.querySelector('p#like' + post.id);
+                    likeButton.addEventListener('click',function(event){
+                        create_like(post.id , likeButton)
+                        
+                    })
                 postsContainer.appendChild(postElementDiv);
 
                 let postElementUser = postElementDiv.querySelector('a');
@@ -133,6 +142,8 @@ function loadAllPosts() {
                     event.preventDefault();
                     loadProfile(post.username);
                 });
+                
+                
             });
             
         })
@@ -156,8 +167,15 @@ function loadFollowingPosts() {
             console.log('loading following posts')
             console.log(data)
             data.posts.forEach(function (post) {
-                let postElementDiv = createPostElementDiv(post.username,post.content, post.timestamp, post.likes);
+                let postElementDiv = createPostElementDiv(post.username,post.content, post.timestamp, post.likes , post.liked_user , post.id);
+                
                 postsContainer.appendChild(postElementDiv);
+                let likeButton = postElementDiv.querySelector('p#like' + post.id);
+                    likeButton.addEventListener('click',function(event){
+                        create_like(post.id , likeButton)
+                        
+                    })
+
                 let postElementUser = postElementDiv.querySelector('a');
                 postElementUser.addEventListener('click', function (event) {
                     event.preventDefault();
@@ -171,6 +189,8 @@ function loadFollowingPosts() {
             console.log('Error:' , error.message)
         });
 }
+
+
 
 function loadProfile(username) {
     let postsContainer = document.querySelector('#posts-container');
@@ -189,31 +209,24 @@ function loadProfile(username) {
             return response.json();
         })
         .then(function (profileData) {
+            console.log(profileData)
+            console.log("The above is the profileData")
             let followElements = createFollowElements(profileData);
-            console.log(profileData.posts)
             postsContainer.appendChild(followElements);
-            console.log(followElements)
-            console.log('logings')
             followUnfollowButton = document.querySelector('#followButton')
-            console.log(followUnfollowButton)
             if (followUnfollowButton !== null ){
-                
-                console.log(followUnfollowButton)
                 followUnfollowButton.addEventListener('click', function(event){
                     event.preventDefault()
                     console.log('button clicked')
                     console.log(profileData.posts[0].username)
                     console.log(followUnfollowButton.innerText)
                     fetch(`/followUnfollow/${profileData.posts[0].username}/${followUnfollowButton.innerText}`)
-
                     .then(function(response){
                         if (!response.ok){
                             
                         }
                         if(followUnfollowButton.innerText == 'Follow'){
-                            followUnfollowButton.innerText = 'Unfollow'
-                            
-                                
+                            followUnfollowButton.innerText = 'Unfollow'        
                         }
                         else{
                             followUnfollowButton.innerText = 'Follow'
@@ -228,13 +241,26 @@ function loadProfile(username) {
                         followersElement.textContent = response.followers_count
                     })
                 })
-            }
-            
+            }            
                     profileData.posts.forEach(function (profilePost) {
-                    let postElementDiv = createPostElementProfileDiv( profilePost.content, profilePost.timestamp, profilePost.likes);
+                    let postElementDiv = createPostElementProfileDiv( profilePost.id , profilePost.content, profilePost.timestamp, profilePost.likes, profilePost.liked_user , profilePost.username );
+                    let deleteButton = createDeleteButton()
+                    postElementDiv.append(deleteButton)
+                    deleteButton.addEventListener('click',function(event){
+                        delete_post(profilePost.id)
+                        console.log("deleted")
+                        
+                    })
+                    let likeButton = postElementDiv.querySelector('p#like' + profilePost.id);
+                    likeButton.addEventListener('click',function(event){
+                        create_like(profilePost.id , likeButton)
+                        
+                    })
+
                     postsContainer.appendChild(postElementDiv);
+
+                    
             });
-            
             
         })
         .catch(function (error) {
@@ -242,12 +268,19 @@ function loadProfile(username) {
         });
 }
 
-function createPostElementDiv(username, content, timestamp, likes) {
+function createPostElementDiv(username , content, timestamp, likes , liked_user, id) {
+    console.log(username)
+    console.log("is printed")
     let postElementDiv = document.createElement('div');
     let postElementUser = document.createElement('a');
     let postElementContent = document.createElement('p');
     let postElementDate = document.createElement('p');
     let postElementLikes = document.createElement('p');
+    postElementLikes.id = 'like' + id;
+
+    
+    
+
 
     if (username) {
         postElementUser.href = `/profile/${username}`;
@@ -257,11 +290,21 @@ function createPostElementDiv(username, content, timestamp, likes) {
 
     postElementContent.innerHTML = `${content}`;
     if (timestamp) postElementDate.innerHTML = `Posted on: ${timestamp}`;
-    if (likes !== null) postElementLikes.innerHTML = `Likes: ${likes}`;
+    if (likes !== null){
+        if(liked_user.includes(username)){
+            
+            postElementLikes.innerHTML = `❤️${likes}`;
+
+        }
+        else{
+            postElementLikes.innerHTML = `♡${likes}`;
+        }
+    }
 
     postElementDiv.appendChild(postElementContent);
     if (timestamp) postElementDiv.appendChild(postElementDate);
     if (likes !== null) postElementDiv.appendChild(postElementLikes);
+
 
     // Styling
     postElementDiv.style.margin = "30px";
@@ -317,19 +360,35 @@ function createFollowCountElement(title, count) {
 }
 
 
-function createPostElementProfileDiv(content, timestamp, likes) {
+function createPostElementProfileDiv(id , content, timestamp, likes , liked_user, username) {
+    
     let postElementDiv = document.createElement('div');
+    postElementDiv.id = id;
     let postElementContent = document.createElement('p');
     let postElementDate = document.createElement('p');
     let postElementLikes = document.createElement('p');
+    postElementLikes.id = 'like' + id;
+    
 
     postElementContent.innerHTML = `${content}`;
     if (timestamp) postElementDate.innerHTML = `Posted on: ${timestamp}`;
-    if (likes !== null) postElementLikes.innerHTML = `Likes: ${likes}`;
+    if (likes !== null){
+        if(liked_user.includes(username)){
+            
+            postElementLikes.innerHTML = `❤️${likes}`;
 
+        }
+        else{
+            postElementLikes.innerHTML = `♡${likes}`;
+        }
+    }
+    
+        
+    
     postElementDiv.appendChild(postElementContent);
     if (timestamp) postElementDiv.appendChild(postElementDate);
     if (likes !== null) postElementDiv.appendChild(postElementLikes);
+    
 
     // Styling
     postElementDiv.style.margin = "30px";
@@ -389,4 +448,67 @@ function createPagination(has_previous,has_next) {
 
 
     return paginationButtonDiv;
+}
+
+
+function createDeleteButton(){
+    
+        let deleteButton = document.createElement('button');
+        deleteButton.id = 'delete';
+        deleteButton.innerText = 'Delete';
+        deleteButton.style.width = '60px';
+        deleteButton.style.height = '30px';
+        deleteButton.style.fontSize = '15px';
+        deleteButton.style.color = 'black';
+        deleteButton.style.borderRadius = '12px';
+        
+        return deleteButton
+    
+}
+
+function delete_post(id){
+    fetch(`/delete/${id}`,
+        {
+            method: 'DELETE',
+            headers:{
+                'X-CSRFToken': csrftoken    
+            }
+        })
+        .then(function(response){
+            if(!response.ok){
+                throw Error(response.status)
+            }
+            return response.json()   
+        })
+        .then(function(data){
+            document.getElementById(id).remove()
+        })
+        .catch(function (error) {
+            console.error('Error:', error.message);
+            alert(`Error: ${error.message}`);
+        });
+}
+
+
+function create_like(id,likeButton){
+
+        fetch(`/create_like/${id}`)
+        .then(function(response){
+        if(!response.ok ){
+            throw new Error(error.error);
+            }
+        return response.json()    
+            })
+            .then(function(data){
+                console.log(data)
+                if(data.status === 'liked'){
+                    likeButton.innerHTML = `❤️${data.like_count}`;
+                    }
+                else{
+                    likeButton.innerHTML = `♡${data.like_count}`;
+                    }
+                    })
+            .catch(function(error){
+                console.log('Error:', error);
+                })
 }

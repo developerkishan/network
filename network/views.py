@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate, login, logout
-from django.db import IntegrityError
+from django.db import IntegrityError 
+from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect ,HttpResponseNotAllowed ,JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
@@ -59,11 +60,16 @@ def get_all_posts(request):
     print(f"{page.has_next()} is printed")
     posts_data = []
     for post in page:
+        liked_user = []
+        for user in post.likes.all():
+            liked_user.append(user.username)
         post_data = {
+            'id': post.id,
             'username' : post.creator.username,
             'content': post.content,
             'timestamp': post.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-            'likes': post.likes.count()
+            'likes': post.likes.count(),
+            'liked_user' : liked_user
         }
         posts_data.append(post_data)
     return JsonResponse({
@@ -91,12 +97,19 @@ def profile(request, username):
     print(f"Printing the user who is signed in : {request.user}")
     # Serialize posts data
     posts_data = []
+
     for post in posts:
+        print("Printing the list")
+        liked_user = []
+        for user in post.likes.all():
+            liked_user.append(user.username)
         post_data = {
+            'id': post.id,
             'username': post.creator.username,
             'content': post.content,
             'timestamp': post.created_at.strftime('%Y-%m-%d %H:%M:%S'),  # Format the timestamp
-            'likes': post.likes.count()
+            'likes': post.likes.count(),
+            'liked_user': liked_user
         }
         posts_data.append(post_data)
     following = user.followings.all()
@@ -198,11 +211,16 @@ def following_posts(request):
             posts = Post.objects.filter(creator=userObject)
             # Serialize posts data
             for post in posts:
+                liked_user = []
+                for user in post.likes.all():
+                    liked_user.append(user.username)
                 post_data = {
+                    'id': post.id,
                     'username': post.creator.username,
                     'content': post.content,
                     'timestamp': post.created_at.strftime('%Y-%m-%d %H:%M:%S'),  # Format the timestamp
-                    'likes': post.likes.count()
+                    'likes': post.likes.count(),
+                    'liked_user': liked_user
                 }
                 posts_data.append(post_data)
         return JsonResponse({
@@ -245,3 +263,46 @@ def followUnfollow(request, username,action):
     return JsonResponse({
                 'error': 'User is not logged in '
             }, status = 401)
+
+
+def delete(request, id ):
+    if request.method == 'DELETE':
+        post = Post.objects.filter(creator = request.user,id = id).first()
+        if(post):
+            try:
+                post.delete()
+                return JsonResponse({
+            'status': 'deleted'
+        },status = 200)
+            except ProtectedError:
+                return JsonResponse({
+                    'error': 'Deletion prevented by Foreign key'
+                } , status = 400)
+        else: 
+            return JsonResponse({
+            'status': 'not found'
+        },status = 400)
+    else:
+        return JsonResponse({
+            'error': 'Method not Allowed'
+        }, status = 405)
+    
+def create_like(request, id):
+    post = Post.objects.filter(id = id ).first()
+    if(post):
+        if(request.user in post.likes.all()):
+            post.likes.remove(request.user)
+            return JsonResponse({
+                'status' : 'disliked',
+                'like_count' : post.likes.count()
+            }, status = 200)
+        else: 
+            post.likes.add(request.user)
+            return JsonResponse({
+                'status': 'liked',
+                'like_count' : post.likes.count()
+            }, status = 200)
+    else:
+        return JsonResponse({
+            'status': 'not found'
+        },status = 400)
